@@ -4,7 +4,7 @@ import {useRouter} from 'next/navigation';
 import {useCallback,useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {api,authRequest,forgetToken,messageOf} from '../lib/api';
 import type {User,Unit,Property,Device,Dashboard,Simulation,Goal} from '../lib/types';
-import {liters,money,daysAgo,localDate,timestamp,csvCell,download} from '../lib/types';
+import {liters,money,daysAgo,localDate,timestamp,csvDocument,download} from '../lib/types';
 import {ConsumptionChart,DeviceBreakdown} from './Charts';
 import {Icon,Brand,Field} from './Ui';
 import {UnitManagement,MeterManagement} from './ManagementPages';
@@ -150,7 +150,7 @@ export default function HydroSmart({view}:{view:string}) {
   function exportCSV() {
     if(!data?.daily.length)return;
     const rows=[['Fecha (Lima)','Unidad','Medidor','Litros','Lecturas'],...data.daily.map(d=>[d.date,selected?.name||unitId,devices.find(x=>x.id===d.deviceId)?.name||d.deviceId,d.liters,d.readingCount])];
-    download('\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'hydrosmart-'+period.from+'-'+period.to+'.csv');
+    download(csvDocument(rows),'hydrosmart-'+period.from+'-'+period.to+'.csv');
     setNotice('Historial diario descargado.');
   }
   if(loading) return <div className="loading-screen"><Brand/><div className="loading-bar"/><p>Cargando tu espacio…</p></div>;
