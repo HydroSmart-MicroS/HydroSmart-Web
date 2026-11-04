@@ -4,3 +4,11 @@ node_modules
 *.tsbuildinfo
 .env*
 
+
+# Never send environment files or credentials to the Docker builder.
+**/.env*
+**/*.env*
+**/*.pem
+**/*.key
+**/.git
+**/.local

@@ -5,3 +5,10 @@ out/
 .env*
 !.env.example
 
+
+# Private environment files and local credentials
+*.env*
+*.pem
+*.key
+.local/
+!.env.example
