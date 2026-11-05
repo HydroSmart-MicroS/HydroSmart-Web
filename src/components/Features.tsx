@@ -5,6 +5,8 @@ import {api,apiDownload,messageOf} from '../lib/api';
 import {liters,money,timestamp,localDate,monthLabel,type Unit,type Goal} from '../lib/types';
 import {Field,Icon} from './Ui';
 import styles from './Payments.module.css';
+import {LeakActions} from './LeakActions';
+import {BrowserPushControls} from './BrowserPushControls';
 
 type Plan={code:string;priceMinor:number;deviceLimit:number};
 export type Membership={active:boolean;planCode:string|null;paidThrough:string|null;deviceLimit:number;cancelAtPeriodEnd?:boolean;plans?:Plan[];devices:null|{count:number;items:{id:string;name:string;unit_id:string;managed:boolean}[]}};
@@ -123,8 +125,8 @@ export function PaymentCenter({membership,units,unitId,onChanged}:{membership:Me
   </div>;
 }
 
-type Notice={id:string;title:string;body:string;kind:string;created_at:string;read_at:string|null};
-type Inbox={items:Notice[];unreadCount:number;nextCursor?:string|null;emailConfigured:boolean;email:{pending:number;failed:number;accepted:number}};
+type Notice={id:string;title:string;body:string;kind:string;created_at:string;read_at:string|null;data?:{unitId?:string;alertId?:string;decision?:string}};
+type Inbox={items:Notice[];unreadCount:number;nextCursor?:string|null;emailConfigured:boolean;email:{pending:number;failed:number;accepted:number};push?:{pending:number;failed:number;accepted:number}};
 export function useInbox(enabled:boolean){
  const [data,setData]=useState<Inbox|null>(null),[error,setError]=useState(''),[loadingMore,setLoadingMore]=useState(false);
  const request=useRef(0),allowed=useRef(enabled),pages=useRef(1),moreLock=useRef(false);
@@ -166,7 +168,7 @@ export function NotificationBell({inbox}:{inbox:InboxHook}) {
  return <><button type="button" className="notification-bell icon-button" aria-label={'Notificaciones: '+(inbox.data?.unreadCount||0)+' sin leer'} aria-haspopup="dialog" aria-expanded={open} onClick={()=>{setError('');dialog.current?.showModal();setOpen(true);void inbox.refresh();}}><Icon name="bell"/>{!!inbox.data?.unreadCount&&<span>{inbox.data.unreadCount}</span>}</button>
  <dialog ref={dialog} className="notification-preview" aria-labelledby={titleId} onClose={()=>setOpen(false)} onCancel={()=>setOpen(false)} onClick={e=>{if(e.target!==e.currentTarget)return;const box=e.currentTarget.getBoundingClientRect();if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)close();}}>
   <div className="preview-heading"><div><h2 id={titleId}>Notificaciones</h2><small>{inbox.data?.unreadCount||0} sin leer</small></div><button className="icon-button" aria-label="Cerrar notificaciones" onClick={close}>×</button></div>
-  <ErrorMessage value={error||inbox.error}/><div className="preview-items">{!inbox.enabled?<p>Activa un plan para consultar tus notificaciones.</p>:inbox.data===null&&!inbox.error?<p>Cargando notificaciones…</p>:!inbox.data?.items.length?<p>No tienes notificaciones todavía.</p>:inbox.data.items.slice(0,6).map(n=><article key={n.id} className={'preview-item '+(!n.read_at?'unread':'')}><strong>{n.title}</strong><p>{n.body}</p><small>{timestamp(n.created_at)}</small>{!n.read_at&&<button className="text-link" disabled={!!busy} onClick={()=>void read(n.id)}>Marcar leída</button>}</article>)}</div>
+  <ErrorMessage value={error||inbox.error}/><div className="preview-items">{!inbox.enabled?<p>Activa un plan para consultar tus notificaciones.</p>:inbox.data===null&&!inbox.error?<p>Cargando notificaciones…</p>:!inbox.data?.items.length?<p>No tienes notificaciones todavía.</p>:inbox.data.items.slice(0,6).map(n=><article key={n.id} className={'preview-item '+(!n.read_at?'unread':'')}><strong>{n.title}</strong><p>{n.body}</p><small>{timestamp(n.created_at)}</small>{n.kind==='possible_leak'&&n.data?.alertId&&n.data?.unitId&&<LeakActions alertId={n.data.alertId} unitId={n.data.unitId} decision={n.data.decision} onChanged={inbox.refresh}/>} {!n.read_at&&<button className="text-link" disabled={!!busy} onClick={()=>void read(n.id)}>Marcar leída</button>}</article>)}</div>
   <div className="preview-footer"><Link className="text-link" href={inbox.enabled?'/notificaciones':'/pagos'} onClick={close}>{inbox.enabled?'Ver todas las notificaciones':'Ver planes'} <Icon name="arrow"/></Link></div>
  </dialog></>;
 }
@@ -184,10 +186,11 @@ export function NotificationsPage({inbox}:{inbox:InboxHook}){
   <section className="card">
    <div className="card-heading"><div><h2>Tu bandeja</h2><p>{inbox.data?.unreadCount||0} sin leer · actualiza cada 10 segundos</p></div><button className="text-link" onClick={()=>void inbox.refresh()}>Actualizar</button></div>
    {!inbox.data&&!inbox.error&&<p role="status">Consultando notificaciones…</p>}
-   {inbox.data?.items.map(n=><article key={n.id} className={'feature-row notification-item '+(!n.read_at?'unread':'')}><div><strong>{n.title}</strong><p>{n.body}</p><small>{timestamp(n.created_at)}</small></div>{!n.read_at&&<button className="button secondary" disabled={busy} onClick={()=>void action(async()=>{await api('notifications/'+n.id+'/read','POST',{});})}>Marcar leída</button>}</article>)}
+   {inbox.data?.items.map(n=><article key={n.id} className={'feature-row notification-item '+(!n.read_at?'unread':'')}><div><strong>{n.title}</strong><p>{n.body}</p><small>{timestamp(n.created_at)}</small>{n.kind==='possible_leak'&&n.data?.alertId&&n.data?.unitId&&<LeakActions alertId={n.data.alertId} unitId={n.data.unitId} decision={n.data.decision} onChanged={inbox.refresh}/>}</div>{!n.read_at&&<button className="button secondary" disabled={busy} onClick={()=>void action(async()=>{await api('notifications/'+n.id+'/read','POST',{});})}>Marcar leída</button>}</article>)}
    {inbox.data&&!inbox.data.items.length&&!inbox.error&&<p className="muted">No tienes notificaciones todavía. Las alertas de tu unidad aparecerán aquí.</p>}
    {inbox.data?.nextCursor&&<div className="button-row inbox-pagination"><button className="button secondary" disabled={inbox.loadingMore||busy} onClick={()=>void inbox.loadMore()}>{inbox.loadingMore?'Cargando anteriores…':'Ver notificaciones anteriores'}</button></div>}
   </section>
+  <BrowserPushControls counts={inbox.data?.push}/>
   <section className="card"><h2>Cómo quieres recibirlas</h2>
    {prefs&&<form className="stacked-form" onSubmit={e=>{e.preventDefault();void action(async()=>{const saved=await api<Record<string,boolean>>('notification-preferences','PUT',prefs);setPrefs(saved);setNotice('Preferencias guardadas para los próximos avisos.');});}}>
     <fieldset disabled={busy}><div className="preference-grid">{Object.entries(preferenceLabels).map(([key,label])=><label className="check-label" key={key}><input type="checkbox" checked={prefs[key]||false} onChange={e=>setPrefs({...prefs,[key]:e.target.checked})}/>{label}</label>)}</div><button className="button primary" disabled={busy}>{busy?'Guardando…':'Guardar preferencias'}</button></fieldset>
@@ -220,7 +223,8 @@ export function MonitoringPage({unitId,owner}:{unitId:string;owner:boolean}) {
   const preview=await api<{estimate:{total:string}}>('tariffs/estimate?unitId='+encodeURIComponent(unitId)+'&liters='+(summary.monthLiters+518));
   const current=Number(summary.monthEstimate.total),after=Number(preview.estimate.total);
   if(after<=current)throw new Error('La tarifa de esta unidad no aumenta con el consumo. Configura un precio por m³ para probar la meta.');
-  const target=(Math.ceil((current+after)/2/0.8*100)/100).toFixed(2);
+  const targetQuote=await api<{estimate:{total:string}}>('tariffs/estimate?unitId='+encodeURIComponent(unitId)+'&liters='+((summary.monthLiters+259)/0.8));
+  const target=(Math.ceil(Number(targetQuote.estimate.total)*100)/100).toFixed(2);
   const next={...rules,highEnabled:true,thresholdLiters:'100',windowSeconds:3600,leakEnabled:true,leakAllDay:true,leakWindowSeconds:30,cooldownSeconds:60};
   setRules(await api<Rules>('alerts/rules/'+unitId,'PUT',next));setBudget(target);
   setGoal(await api<Goal>('goals','POST',{unitId,budget:target}));
@@ -238,16 +242,17 @@ export function MonitoringPage({unitId,owner}:{unitId:string;owner:boolean}) {
   <details className="card monitoring-guide">
    <summary>Guía rápida: presupuesto y alertas</summary>
    <div className="monitoring-guide-steps">
-    <div><h3>1. Decide tu presupuesto del mes</h3><p>Es el máximo que deseas gastar en agua en esta unidad. Se calcula con el consumo, desagüe, cargo fijo e impuestos de su tarifa. Es aparte del plan HydroSmart.</p><p>El aviso se genera al llegar al 80%. El presupuesto es personal y corresponde al mes actual en Lima.</p></div>
+    <div><h3>1. Decide tu presupuesto del mes</h3><p>Es el máximo que deseas gastar en agua en esta unidad. Se calcula con el consumo, desagüe, cargo fijo e impuestos de su tarifa. Es aparte del plan HydroSmart.</p><p>El aviso se genera al llegar al 80% de los litros objetivo. El presupuesto es personal y corresponde al mes actual en Lima.</p></div>
     <div><h3>2. Elige cuándo recibir alertas</h3><p>Consumo inusual suma los litros de todos los medidores de la unidad durante los últimos minutos que elijas. Posible fuga busca flujo continuo en un mismo medidor.</p><p>Un flujo de cero o una interrupción de lecturas reinicia la detección de fuga.</p></div>
-    <div><h3>3. Elige dónde recibirlas</h3><p>El propietario configura las reglas de la unidad; cada cuenta decide si recibe avisos en la app y por correo. El inquilino recibe los correspondientes a su período de alquiler.</p><Link className="text-link" href="/notificaciones">Revisar mis notificaciones <Icon name="arrow"/></Link></div>
+    <div><h3>3. Elige dónde recibirlas</h3><p>El propietario configura las reglas de la unidad; cada cuenta decide si recibe avisos en la app, por correo y en su navegador. El inquilino recibe los correspondientes a su período de alquiler.</p><Link className="text-link" href="/notificaciones">Revisar mis notificaciones <Icon name="arrow"/></Link></div>
    </div>
   </details>
   <div className="two-columns monitoring-grid">
    <section className="card">
     <div className="card-heading"><div><h2>Mi presupuesto mensual de agua</h2><p>Tu límite personal para esta unidad · mes actual en Lima</p></div><Icon name="drop"/></div>
-    <p className="muted small-text">Elige cuánto deseas gastar como máximo. El avance muestra el costo estimado del agua que ya consumiste.</p>
-    {goal&&<div className="goal-progress"><strong>{money(goal.progress.cost)} <small>de {money(goal.budget)}</small></strong><progress aria-label="Presupuesto utilizado" max={100} value={Math.min(100,goal.progress.percent)}/><p>{liters(goal.progress.percent)}% utilizado · {liters(goal.progress.liters)} L</p><small>Equivale aproximadamente a {liters(Number(goal.targetLiters))} litros con la tarifa actual. El aviso del 80% respeta tus preferencias de notificación.</small></div>}
+    <p className="muted small-text">Ingresa tu presupuesto y calcularemos cuántos litros puedes consumir. El aviso se activa al llegar al 80% de esa meta en litros.</p>
+    {goal&&Number(goal.targetLiters)<=0&&<p className="message" role="status">Tu presupuesto ya no supera el costo base de la tarifa actual. Actualízalo para obtener una meta de litros válida.</p>}
+    {goal&&Number(goal.targetLiters)>0&&<div className="goal-progress"><strong>{liters(goal.progress.liters)} L <small>de {liters(Number(goal.targetLiters))} L</small></strong><progress aria-label="Meta de litros utilizada" max={100} value={Math.min(100,goal.progress.percent)}/><p>{liters(goal.progress.percent)}% de la meta en litros</p><small>Costo estimado: {money(goal.progress.cost)} · Presupuesto: {money(goal.budget)}. El cargo fijo no aumenta el porcentaje de litros.</small></div>}
     <form className="stacked-form" onSubmit={e=>{e.preventDefault();if(budgetInvalid||busy)return;void work(async()=>{setGoal(await api<Goal>('goals','POST',{unitId,budget}));setNotice('Presupuesto mensual guardado.');});}}>
      <Field label="Mi presupuesto del mes (S/)" hint={minimumBudget?'Mínimo para esta tarifa: '+money(minimumBudget)+'.':'Se validará con la tarifa de esta unidad.'}><input type="number" min={minimumBudget||'.01'} max="1000000" step=".01" aria-invalid={budgetInvalid} value={budget} onChange={e=>{setBudget(e.target.value);setError('');}} required/></Field>
      {budgetInvalid&&<p className="monitoring-inline-error" role="alert">El presupuesto mínimo es {money(minimumBudget!)}. El cargo fijo y sus impuestos ya forman parte del costo del mes.</p>}
@@ -288,7 +293,7 @@ export function MonitoringPage({unitId,owner}:{unitId:string;owner:boolean}) {
    </section>
   </div>
  {owner&&<section className="card"><h2>Probar las alertas con tus medidores virtuales</h2><p className="muted small-text">La prueba completa pausa la generación, activa reglas de fuga las 24 horas y crea una meta cercana al 80%. Durante 30 segundos añade 518 litros al consumo de esta unidad para validar las dos alertas, la meta y los avisos por correo según tus preferencias.</p><button className="button primary" disabled={busy||!rules} onClick={()=>void work(validationDemo)}>Probar alertas, meta y correo</button><p className="muted small-text">Genera lecturas que se guardan como consumo. Para probar una fuga durante el día, guarda primero «24 horas» y una duración de 3 minutos. Pausa la generación en vivo desde Medidores para aislar la prueba.</p><div className="button-row">{[['high','Consumo alto · 500 L'],['leak','Fuga continua · 3 min'],['normal','Detener flujo · 0 L']].map(([scenario,label])=><button className="button secondary" key={scenario} disabled={busy} onClick={()=>void work(async()=>{await api('simulation/'+unitId,'POST',{action:'scenario',scenario});setNotice('Lecturas generadas. Las alertas llegarán en unos segundos.');})}>{label}</button>)}</div></section>}
- <section className="card"><div className="card-heading"><div><h2>Alertas de tu unidad</h2><p>Los avisos también aparecen en Notificaciones.</p></div><button className="text-link" onClick={()=>void work(refresh)}>Actualizar</button></div>{loading&&<p role="status">Consultando alertas…</p>}{!loading&&!queryError&&!alerts.length&&<p className="muted">No se detectaron alertas para tu cuenta.</p>}{alerts.map(a=><article className="feature-row" key={a.id}><div><strong>{a.details.title}</strong><p>{a.details.body}</p><small>{timestamp(a.detected_at)} · {a.status==='resolved'?'Resuelta':'Pendiente'}</small></div>{a.status!=='resolved'&&<button className="button secondary" disabled={busy} onClick={()=>void work(async()=>{await api('alerts/'+a.id+'/resolve?unitId='+unitId,'POST',{});})}>Marcar resuelta</button>}</article>)}</section></div>;
+ <section className="card"><div className="card-heading"><div><h2>Alertas de tu unidad</h2><p>Los avisos también aparecen en Notificaciones.</p></div><button className="text-link" onClick={()=>void work(refresh)}>Actualizar</button></div>{loading&&<p role="status">Consultando alertas…</p>}{!loading&&!queryError&&!alerts.length&&<p className="muted">No se detectaron alertas para tu cuenta.</p>}{alerts.map(a=><article className="feature-row" key={a.id}><div><strong>{a.details.title}</strong><p>{a.details.body}</p><small>{timestamp(a.detected_at)} · {({open:'Pendiente',resolved:'Resuelta',confirmed:'Fuga confirmada',dismissed:'Descartada'} as Record<string,string>)[a.status]||a.status}</small></div>{a.kind==='possible_leak'?<LeakActions alertId={a.id} unitId={unitId} decision={a.status} onChanged={refresh}/>:a.status==='open'&&<button className="button secondary" disabled={busy} onClick={()=>void work(async()=>{await api('alerts/'+a.id+'/resolve?unitId='+unitId,'POST',{});})}>Marcar resuelta</button>}</article>)}</section></div>;
 }
 
 type Report={id:string;format?:'csv'|'pdf'|'xlsx';status:string;period_start:string;period_end:string;requested_at:string;last_error?:string|null;retryable?:boolean};

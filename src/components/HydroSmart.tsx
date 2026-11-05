@@ -13,6 +13,7 @@ import {AccountSecurity,Avatar} from './AccountSecurity';
 import {ConsumptionStatus,ComparisonPanel,RecommendationsPanel} from './ConsumptionInsights';
 import {SettingsPage} from './SettingsPage';
 import {passwordError,passwordHint,passwordPattern} from '../lib/validation';
+import {disableBrowserPush} from '../lib/browser-push';
 import {PaymentCenter,MonitoringPage,NotificationsPage,ReportJobs,useInbox,NotificationBell,type Membership} from './Features';
 
 
@@ -57,7 +58,9 @@ export default function HydroSmart({view}:{view:string}) {
   const loadUnits=useCallback(async(currentUser:User)=>{
     const [nextUnits,nextProperties]=await Promise.all([api<Unit[]>('units'),currentUser.profileType==='inquilino'?Promise.resolve([]):api<Property[]>('properties')]);
     setUnits(nextUnits);setProperties(nextProperties);
-    setUnitId(old=>nextUnits.some(u=>u.id===old)?old:nextUnits.find(u=>u.id===sessionStorage.getItem('hydrosmart-unit'))?.id||nextUnits[0]?.id||'');
+    const requested=new URLSearchParams(location.search).get('unitId');
+    setUnitId(old=>nextUnits.find(u=>u.id===requested)?.id||(nextUnits.some(u=>u.id===old)?old:nextUnits.find(u=>u.id===sessionStorage.getItem('hydrosmart-unit'))?.id||nextUnits[0]?.id||''));
+    if(requested){const url=new URL(location.href);url.searchParams.delete('unitId');history.replaceState(history.state,'',url);}
   },[]);
   const loadAccess=useCallback(async(currentUser:User)=>{
     const value=await api<Membership>('billing/status');if(typeof value?.active!=='boolean')throw new Error('No pudimos cargar tus planes. Reintenta la consulta.');setMembership(value);
@@ -121,7 +124,7 @@ export default function HydroSmart({view}:{view:string}) {
     const available=existing.some(d=>d.state!=='disabled')?0:Math.min(1,Math.max(0,status.deviceLimit-status.devices.count));
     const examples=['Ducha principal','Lavadero de cocina','Lavadora','Jardín'];
     for(const [index,name] of examples.slice(0,available).entries()) {
-      const device=await api<Device>('devices','POST',{unitId:id,serialNumber:'SIM-'+crypto.randomUUID(),name,category:['Baño','Cocina','Lavandería','Exterior'][index]});
+      const device=await api<Device>('devices','POST',{unitId:id,serialNumber:'SIM-'+crypto.randomUUID(),name,category:['GENERAL','COCINA','BAÑO','RIEGO'][index]});
       await api('devices/'+device.id,'PUT',{name:device.name,category:device.category,state:'active'});
     }
     for(const device of existing.filter(d=>d.state==='registered'))await api('devices/'+device.id,'PUT',{name:device.name,category:device.category,state:'active'});
@@ -165,7 +168,7 @@ export default function HydroSmart({view}:{view:string}) {
       <nav aria-label="Navegación principal">{navigation.map(([key,label,icon])=><Link key={key} href={key==='dashboard'?'/':'/'+key} className={'nav-link '+(effectiveView===key?'active':'')} aria-current={effectiveView===key?'page':undefined}><Icon name={icon}/>{label}{effectiveView===key&&<span className="nav-indicator"/>}</Link>)}</nav>
       <div className="sidebar-bottom"><div className="simulation-note"><span className="pulse-dot"/><strong>Entorno de demostración</strong><p>Medidores virtuales.<br/>El consumo se genera localmente.</p></div>
         <Link href="/configuracion" className={'nav-link '+(['configuracion','privacidad'].includes(view)?'active':'')}><Icon name="shield"/>Configuración</Link>
-        <button className="nav-link logout" disabled={busy} onClick={()=>void action(async()=>{await authRequest('sign-out',{});forgetToken();setUser(null);router.push('/login');})}><Icon name="logout"/>Cerrar sesión</button>
+        <button className="nav-link logout" disabled={busy} onClick={()=>void action(async()=>{await disableBrowserPush().catch(()=>{});await authRequest('sign-out',{});forgetToken();setUser(null);router.push('/login');})}><Icon name="logout"/>Cerrar sesión</button>
         <div className="sidebar-user"><Avatar user={user}/><span><strong>{user.name}</strong><small>{user.profileType==='inquilino'?'Inquilino':'Propietario'}</small></span></div>
       </div>
     </aside>
@@ -252,10 +255,11 @@ function AuthScreen({register,error:initialError,onSuccess}:{register:boolean;er
   }
   return <main className="auth-layout"><section className="auth-story"><a href="/" className="brand-link"><Brand/></a><div className="auth-story-copy"><span className="eyebrow">TU AGUA, EN CLARO</span><h1>Un hábito mejor <br/>empieza por <br/><em>entender.</em></h1><p>Observa tu consumo, conoce su costo y encuentra un ritmo que tenga sentido para tu hogar.</p><div className="auth-water-art" aria-hidden="true"><div/><div/><div/><Icon name="drop"/></div><span className="auth-demo-tag"><span className="pulse-dot"/>Demostración con medidores virtuales</span></div><small>HydroSmart · Proyecto académico</small></section>
     <section className="auth-form-area"><a href="/" className="back-link">← Volver al inicio</a><div className="auth-form-wrap"><span className="eyebrow">BIENVENIDO A HYDROSMART</span><h2>{register?'Tu primer paso, en claro.':'Qué bueno verte de nuevo.'}</h2><p className="muted">{register?'Crea tu cuenta y empieza a explorar tus datos.':'Ingresa a tu espacio y revisa cómo va tu consumo.'}</p>{deletionTicket&&<div className="message success" role="status">Tu solicitud de eliminación fue recibida. El acceso a la cuenta ya está cerrado; el borrado continuará en segundo plano. Referencia: {deletionTicket}</div>}{error&&<div className="message error" role="alert">{error}</div>}
-      <form className="stacked-form" onSubmit={submit}>{register&&<><Field label="Nombre completo"><input name="name" autoComplete="name" placeholder="¿Cómo te llamas?" minLength={2} maxLength={120} required/></Field><Field label="Usaré HydroSmart como"><select value={profile} onChange={e=>setProfile(e.target.value)}><option value="propietario">Propietario · hogares y unidades</option><option value="inquilino">Inquilino · una unidad asignada</option></select></Field></>}
+      <form className="stacked-form" method="post" onSubmit={submit}>{register&&<><Field label="Nombre completo"><input name="name" autoComplete="name" placeholder="¿Cómo te llamas?" minLength={2} maxLength={120} required/></Field><Field label="Usaré HydroSmart como"><select value={profile} onChange={e=>setProfile(e.target.value)}><option value="propietario">Propietario · hogares y unidades</option><option value="inquilino">Inquilino · una unidad asignada</option></select></Field></>}
       <Field label="Correo electrónico"><input name="email" type="email" autoComplete="email" required placeholder="tu@correo.com" maxLength={254}/></Field><Field label="Contraseña" hint={register?passwordHint:undefined}><input name="password" type="password" autoComplete={register?'new-password':'current-password'} minLength={register?12:1} maxLength={128} pattern={register?passwordPattern:undefined} required placeholder={register?'Crea una contraseña segura':'Tu contraseña'}/></Field>
       {register&&<Field label="Repetir contraseña"><input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Escribe otra vez tu contraseña"/></Field>}
       {register&&<p className="small-text muted">Al crear tu cuenta, podrás consultar cómo se guardan y usan tus datos en la sección Privacidad.</p>}<button className="button primary full" disabled={busy}>{busy?'Un momento…':register?'Crear mi cuenta':'Iniciar sesión'}<Icon name="arrow"/></button></form>
+      {!register&&<p className="auth-switch"><Link href="/forgot-password">Olvidé mi contraseña</Link></p>}
       <p className="auth-switch">{register?'¿Ya tienes una cuenta?':'¿Aún no tienes una cuenta?'} <Link href={register?'/login':'/register'}>{register?'Inicia sesión':'Crea tu cuenta'}</Link></p><div className="auth-trust"><Icon name="shield"/>Tu sesión se guarda en una cookie del navegador.</div></div></section></main>;
 }
 

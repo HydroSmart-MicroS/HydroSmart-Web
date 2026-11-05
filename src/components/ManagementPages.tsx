@@ -50,6 +50,7 @@ export function MeterManagement({devices,inventoryAvailable,loading,data,unitId,
   if(create){url.searchParams.delete('crear');window.history.replaceState(window.history.state,'',url.toString());}
  },[unitId,owner]);
  const full=capacity?capacity.count>=capacity.limit:true;
+ const general=devices.find(d=>d.state!=='disabled'&&d.category.toUpperCase()==='GENERAL');
  function close(){setFormOpen(false);setEditing(null);setPending(null);serial.current=null;}
  async function save(e:FormEvent<HTMLFormElement>){
   e.preventDefault();const form=new FormData(e.currentTarget);
@@ -83,11 +84,13 @@ export function MeterManagement({devices,inventoryAvailable,loading,data,unitId,
    {owner&&<p className="capacity-line">{capacity?capacity.count+' de '+capacity.limit+' medidores usados en tu cuenta.':'Consultando capacidad del plan…'} {full&&capacity&&'Has alcanzado el límite.'} <Link className="text-link" href="/pagos">Ver mi plan</Link></p>}
    {!inventoryAvailable&&<p className="empty-small muted" role="status">{loading?'Consultando medidores…':'No se pudo consultar la lista de medidores. Reintenta la consulta.'}</p>}
    {inventoryAvailable&&!devices.length&&<p className="empty-small muted">Todavía no hay medidores. {owner?'Añade uno para comenzar a registrar consumo.':'El propietario debe añadir y activar los medidores.'}</p>}
+   {owner&&inventoryAvailable&&devices.some(d=>d.state!=='disabled')&&!general&&<div className="message" role="status"><strong>Elige tu medidor general.</strong><p>Abre «Editar medidor» en el que mide el suministro principal y elige la ubicación General. Conservaremos su nombre y todas sus lecturas.</p></div>}
+   {owner&&devices.filter(d=>d.state!=='disabled'&&d.category.toUpperCase()==='GENERAL').length>1&&<p className="message" role="status">Hay varios medidores antiguos con ubicación General. Conserva uno como General y asigna Riego, Cocina o Baño a los demás desde Editar medidor.</p>}
    <div className="devices-list">{devices.map(device=>{
     const usage=data?.devices.find(d=>d.deviceId===device.id);
     return <article className="device-item" key={device.id}><div className="device-item-top"><span className="device-icon"><Icon name="meter"/></span><span className="device-title"><h3>{device.name}</h3><span>{device.category}</span></span><span className={'status-badge '+device.state}>{device.state==='active'?'Activo':device.state==='disabled'?'Desactivado':'Pendiente de activar'}</span></div>
      <div className="device-stats"><div><small>CONSUMO · ÚLTIMOS 31 DÍAS</small><strong>{data?liters(usage?.liters||0):'—'} <span>L</span></strong></div><div><small>ÚLTIMA LECTURA</small><strong className="last-reading">{data?timestamp(usage?.lastReadingAt||null):'No disponible'}</strong></div></div>
-     {owner&&<div className="button-row"><button className="button secondary" disabled={busy} onClick={()=>{setPending(null);setEditing(device);setFormOpen(true);}}>Editar nombre</button><button className="button secondary" disabled={busy||(device.state==='disabled'&&full)} onClick={()=>{if(device.state==='active'&&!window.confirm('¿Desactivar este medidor? Dejará de generar lecturas y conservará su historial.'))return;void work(async()=>{await api('devices/'+device.id,'PUT',{name:device.name,category:device.category,state:device.state==='active'?'disabled':'active'});await onReload();notify(device.state==='active'?'Medidor desactivado. Su historial se conserva.':'Medidor activado.');});}}>{device.state==='active'?'Desactivar':'Activar'}</button></div>}
+     {owner&&<div className="button-row"><button className="button secondary" disabled={busy} onClick={()=>{setPending(null);setEditing(device);setFormOpen(true);}}>Editar medidor</button><button className="button secondary" disabled={busy||(device.state==='disabled'&&full)} onClick={()=>{if(device.state==='active'&&!window.confirm('¿Desactivar este medidor? Dejará de generar lecturas y conservará su historial.'))return;void work(async()=>{await api('devices/'+device.id,'PUT',{name:device.name,category:device.category,state:device.state==='active'?'disabled':'active'});await onReload();notify(device.state==='active'?'Medidor desactivado. Su historial se conserva.':'Medidor activado.');});}}>{device.state==='active'?'Desactivar':'Activar'}</button></div>}
      <details className="meter-technical"><summary>Identificador del medidor</summary><code>{device.serialNumber}</code></details></article>;
    })}</div>
   </section>
@@ -97,7 +100,7 @@ export function MeterManagement({devices,inventoryAvailable,loading,data,unitId,
    {!editing&&!pending&&full&&<p className="message" role="status">{capacity?'Tu plan no tiene plazas disponibles. Revisa la capacidad en Plan y pagos.':'No pudimos consultar la capacidad. Reintenta desde Plan y pagos.'}</p>}
    <form className="stacked-form" onSubmit={save}>
     <Field label="Nombre del medidor"><input name="name" required maxLength={120} disabled={busy} defaultValue={editing?.name||''} placeholder="Ej. Medidor del departamento"/></Field>
-    <Field label="Ubicación"><input name="category" required maxLength={80} disabled={busy} defaultValue={editing?.category||'General'} placeholder="Ej. Baño, cocina o general"/></Field>
+    <Field label="Ubicación" hint="Cada unidad necesita un medidor General. Los adicionales pueden medir Riego, Cocina o Baño."><select name="category" required disabled={busy} defaultValue={editing?.category?.toUpperCase()||(!general?'GENERAL':'COCINA')}>{editing&&!['GENERAL','RIEGO','COCINA','BAÑO'].includes(editing.category.toUpperCase())&&<option value={editing.category.toUpperCase()} disabled>{editing.category} · elige una ubicación</option>}{[['GENERAL','General'],['RIEGO','Riego'],['COCINA','Cocina'],['BAÑO','Baño']].map(([value,label])=><option key={value} value={value} disabled={value==='GENERAL'&&!!general&&general.id!==editing?.id}>{label}</option>)}</select></Field>
     <div className="button-row"><button className="button primary" disabled={busy||(!editing&&!pending&&full)}>{busy?'Guardando…':editing?'Guardar cambios':pending?'Reintentar activación':'Crear y activar medidor'}</button><button className="button secondary" type="button" onClick={close} disabled={busy}>Cancelar</button></div>
    </form>
   </Modal>}
