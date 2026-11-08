@@ -24,13 +24,6 @@ export function monthLabel(value:string|null) {
   const month=value?.match(/^(\d{4})-(0[1-9]|1[0-2])(?:-\d{2})?$/);
   return month?new Intl.DateTimeFormat('es-PE',{timeZone:'UTC',year:'numeric',month:'long'}).format(new Date(month[1]+'-'+month[2]+'-01T12:00:00Z')):value||'Mes sin fecha';
 }
-export function csvCell(value:string|number) {
-  const text=String(value);const safe=/^[=+\-@\t\r]/.test(text)?"'"+text:text;
-  return '"'+safe.replaceAll('"','""')+'"';
-}
-export function csvDocument(rows:(string|number)[][]) {
-  return '\uFEFFsep=;\r\n'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n');
-}
 export function download(text:string,name:string,type='text/csv;charset=utf-8') {
   const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }

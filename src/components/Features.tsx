@@ -312,7 +312,7 @@ export function ReportJobs({unitId,from,to}:{unitId:string;from:string;to:string
   if(lock.current)return;lock.current=true;setBusy(true);setError('');
   try{await fn();await refresh();}catch(e){setError(messageOf(e));}finally{lock.current=false;setBusy(false);}
  }
- return <section className="card table-card">
+ return <section className="card table-card" id="mis-reportes">
   <div className="card-heading"><div><h2>Mis reportes</h2><p>Consumo diario y costo estimado. Excel y PDF con diseño; CSV para datos simples.</p></div><div className="report-actions"><Field label="Formato del reporte"><select value={format} disabled={busy} onChange={e=>setFormat(e.target.value as 'csv'|'pdf'|'xlsx')}><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF</option><option value="csv">CSV (datos sin formato)</option></select></Field><button className="button secondary" disabled={busy} onClick={()=>void work(async()=>{await api('reports','POST',{unitId,format,from:from+'T00:00:00-05:00',to:new Date(new Date(to+'T00:00:00-05:00').getTime()+86400000).toISOString()});})}>Preparar reporte {format==='xlsx'?'Excel':format.toUpperCase()}</button></div></div>
   <ErrorMessage value={error||queryError}/>
   {queryError&&<button className="button secondary" disabled={busy} onClick={()=>void refresh().catch(()=>{})}>Reintentar consulta de reportes</button>}

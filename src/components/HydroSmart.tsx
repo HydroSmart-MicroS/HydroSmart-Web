@@ -4,7 +4,7 @@ import {useRouter} from 'next/navigation';
 import {useCallback,useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {api,authRequest,forgetToken,messageOf} from '../lib/api';
 import type {User,Unit,Property,Device,Dashboard,Simulation,Goal} from '../lib/types';
-import {liters,money,daysAgo,localDate,timestamp,csvDocument,download} from '../lib/types';
+import {liters,money,daysAgo,localDate,timestamp} from '../lib/types';
 import {ConsumptionChart,DeviceBreakdown} from './Charts';
 import {Icon,Brand,Field} from './Ui';
 import {UnitManagement,MeterManagement} from './ManagementPages';
@@ -150,12 +150,6 @@ export default function HydroSmart({view}:{view:string}) {
     const state=await api<Simulation>('simulation/'+unitId,'POST',{action:actionName});
     setSimulation(state);setNotice(actionName==='pause'?'Generación en vivo pausada. El historial permanece guardado.':actionName==='seed'?'Generación de historial iniciada: mes anterior completo y mes actual hasta ayer.':'Generación en vivo iniciada.');
   }
-  function exportCSV() {
-    if(!data?.daily.length)return;
-    const rows=[['Fecha (Lima)','Unidad','Medidor','Litros','Lecturas'],...data.daily.map(d=>[d.date,selected?.name||unitId,devices.find(x=>x.id===d.deviceId)?.name||d.deviceId,d.liters,d.readingCount])];
-    download(csvDocument(rows),'hydrosmart-'+period.from+'-'+period.to+'.csv');
-    setNotice('Historial diario descargado.');
-  }
   if(loading) return <div className="loading-screen"><Brand/><div className="loading-bar"/><p>Cargando tu espacio…</p></div>;
   if(authPage) return <AuthScreen register={view==='register'} error={error} onSuccess={async(next)=>{forgetToken();setUser(next);await loadAccess(next);router.push('/');}}/>;
   if(!user) return <div className="loading-screen"><Brand/><p>{error||'Abriendo el inicio de sesión…'}</p><Link className="button primary" href="/login">Iniciar sesión</Link></div>;
@@ -206,8 +200,9 @@ export default function HydroSmart({view}:{view:string}) {
 
         {active&&view==='recomendaciones'&&unitId&&<RecommendationsPanel data={data} devices={devices} loading={dataLoading}/>}
         {active&&view==='historial'&&unitId&&<>
+          <p className="muted small-text">Prepara y descarga tu reporte en <a className="text-link" href="#mis-reportes">Mis reportes</a>, al final de la página.</p>
           <form className="filter-bar card" onSubmit={e=>{e.preventDefault();if(from>to){setError('La fecha inicial debe ser anterior a la final.');return;}setError('');setPeriod({from,to});}}>
-            <Field label="Desde"><input type="date" value={from} required max={to} min={daysAgo(365)} onChange={e=>setFrom(e.target.value)}/></Field><Field label="Hasta"><input type="date" value={to} required min={from} max={localDate()} onChange={e=>setTo(e.target.value)}/></Field><button className="button primary" disabled={dataLoading}>Aplicar período</button><button type="button" className="button secondary export-button" onClick={exportCSV} disabled={!data?.daily.length}>Descargar CSV</button>
+            <Field label="Desde"><input type="date" value={from} required max={to} min={daysAgo(365)} onChange={e=>setFrom(e.target.value)}/></Field><Field label="Hasta"><input type="date" value={to} required min={from} max={localDate()} onChange={e=>setTo(e.target.value)}/></Field><button className="button primary" disabled={dataLoading}>Aplicar período</button>
           </form>
           <div className="history-summary"><span><strong>{data?liters(data.liters):'—'} L</strong> registrados en el período</span><span><strong>{data?money(data.estimate.total):'—'}</strong> estimados · {data?data.readingCount:'—'} lecturas</span></div>
           <ComparisonPanel data={data} loading={dataLoading}/>
