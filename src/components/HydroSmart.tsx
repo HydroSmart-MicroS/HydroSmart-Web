@@ -167,7 +167,7 @@ export default function HydroSmart({view}:{view:string}) {
       </div>
     </aside>
     <div className="app-main">
-      <header className="topbar"><button className="icon-button mobile-menu" aria-label="Abrir menú" aria-expanded={menu} onClick={()=>setMenu(!menu)}><Icon name="menu"/></button><div className="breadcrumb">Mi espacio <span>/</span> <strong>{title}</strong></div><div className="topbar-right"><NotificationBell inbox={inbox}/><span className="local-badge">DEMO LOCAL</span><Link href="/perfil" aria-label="Ver mi perfil"><Avatar user={user} className="small"/></Link></div></header>
+      <header className="topbar"><button className="icon-button mobile-menu" aria-label="Abrir menú" aria-expanded={menu} onClick={()=>setMenu(!menu)}><Icon name="menu"/></button><div className="breadcrumb">Mi espacio <span>/</span> <strong>{title}</strong></div><div className="topbar-right"><NotificationBell inbox={inbox}/><Link href="/perfil" aria-label="Ver mi perfil"><Avatar user={user} className="small"/></Link></div></header>
       <main id="contenido" tabIndex={-1}>
         <div className="page-heading compact-heading"><h1>{title}</h1>
           {units.length>0&&!['perfil','privacidad','pagos','notificaciones','unidades','configuracion'].includes(effectiveView)&&<label className="unit-select"><Icon name="home"/><span><small>UNIDAD ACTUAL</small><select aria-label="Unidad actual" disabled={busy} value={unitId} onChange={e=>chooseUnit(e.target.value)}>{units.map(u=><option key={u.id} value={u.id}>{u.name}{properties.filter(p=>units.some(x=>x.propertyId===p.id)).length>1?' · '+(properties.find(p=>p.id===u.propertyId)?.name||''):''}</option>)}</select></span></label>}

@@ -79,3 +79,14 @@ test('invoice months are readable and do not shift at a timezone boundary',async
  const{monthLabel}=await load('../src/lib/types.ts');
  assert.match(monthLabel('2026-09-01'),/^(septiembre|setiembre) de 2026$/);assert.equal(monthLabel('2026-01'),'enero de 2026');assert.equal(monthLabel(null),'Mes sin fecha');
 });
+
+
+test('domain conflict messages explain the meter rule without exposing symbolic codes',async()=>{
+ const domainMessage='Primero elige el medidor GENERAL de esta unidad desde Medidores.';
+ let conflicts=0;
+ await usingAPI(url=>Promise.resolve(url==='/api/auth/token'?json({token:'TOKEN'}):
+   json({error:conflicts++===0?domainMessage:'duplicate_or_resource_in_use'},409)),async api=>{
+  await assert.rejects(api.api('devices','POST',{}),error=>error.status===409&&error.message===domainMessage);
+  await assert.rejects(api.api('devices','POST',{}),error=>error.status===409&&error.message==='Ya existe ese registro o tiene datos asociados.');
+ });
+});

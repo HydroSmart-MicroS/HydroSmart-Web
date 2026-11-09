@@ -17,7 +17,7 @@ async function jsonResponse(response:Response) {
       response.status===401 ? 'Tu sesión venció. Vuelve a iniciar sesión.' :
       response.status===403 ? 'Tu perfil no tiene permiso para esta acción.' :
       response.status===404 ? 'No encontramos ese recurso o ya no tienes acceso.' :
-      response.status===409 ? 'Ya existe ese registro o tiene datos asociados.' :
+      response.status===409 ? (typeof body?.error==='string'&&/\s/.test(body.error)?body.error:'Ya existe ese registro o tiene datos asociados.') :
       response.status===400 || response.status===422 ? 'Revisa los campos e inténtalo otra vez.' :
       'El servicio no está disponible. Inténtalo en unos segundos.');
     throw new ApiError(message,response.status);

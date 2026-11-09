@@ -8,6 +8,7 @@ import type {Dashboard} from '../lib/types';
 import {Field,Icon,Modal} from './Ui';
 
 type Work=(task:()=>Promise<void>)=>Promise<void>;
+const meterCategories=[['GENERAL','General'],['RIEGO','Riego'],['COCINA','Cocina'],['BAÑO','Baño']];
 export function UnitManagement({user,units,properties,unitId,busy,refresh,onChoose,onReload,work,notify,error}:{user:User;units:Unit[];properties:Property[];unitId:string;busy:boolean;refresh:number;onChoose:(id:string)=>void;onReload:()=>Promise<void>;work:Work;notify:(text:string)=>void;error?:string}){
  const owner=user.profileType==='propietario';
  const [creating,setCreating]=useState(false),[propertyId,setPropertyId]=useState(properties[0]?.id||'new');
@@ -51,9 +52,16 @@ export function MeterManagement({devices,inventoryAvailable,loading,data,unitId,
  },[unitId,owner]);
  const full=capacity?capacity.count>=capacity.limit:true;
  const general=devices.find(d=>d.state!=='disabled'&&d.category.toUpperCase()==='GENERAL');
+ const currentMeter=editing??pending;
+ const needsGeneral=!currentMeter&&!general;
+ const canCreate=inventoryAvailable&&!full;
+ const categories=needsGeneral?meterCategories.slice(0,1):meterCategories;
+ const currentCategory=currentMeter?.category.toUpperCase();
  function close(){setFormOpen(false);setEditing(null);setPending(null);serial.current=null;}
  async function save(e:FormEvent<HTMLFormElement>){
-  e.preventDefault();const form=new FormData(e.currentTarget);
+  e.preventDefault();
+  if(!currentMeter&&!canCreate)return;
+  const form=new FormData(e.currentTarget);
   await work(async()=>{
    const body={name:String(form.get('name')).trim(),category:String(form.get('category')).trim()};
    let registered=pending;
@@ -80,7 +88,7 @@ export function MeterManagement({devices,inventoryAvailable,loading,data,unitId,
   });
  }
  return <div className="feature-stack">
-  <section className="card"><div className="card-heading"><div><h2>Medidores de {unitName}</h2><p>Un medidor registra el agua de un punto de consumo de esta unidad.</p></div>{owner&&<button className="button primary" disabled={busy||full} onClick={()=>{setEditing(null);setPending(null);serial.current=null;setFormOpen(true);}}>Añadir medidor <Icon name="plus"/></button>}</div>
+  <section className="card"><div className="card-heading"><div><h2>Medidores de {unitName}</h2><p>Un medidor registra el agua de un punto de consumo de esta unidad.</p></div>{owner&&<button className="button primary" disabled={busy||!canCreate} onClick={()=>{setEditing(null);setPending(null);serial.current=null;setFormOpen(true);}}>Añadir medidor <Icon name="plus"/></button>}</div>
    {owner&&<p className="capacity-line">{capacity?capacity.count+' de '+capacity.limit+' medidores usados en tu cuenta.':'Consultando capacidad del plan…'} {full&&capacity&&'Has alcanzado el límite.'} <Link className="text-link" href="/pagos">Ver mi plan</Link></p>}
    {!inventoryAvailable&&<p className="empty-small muted" role="status">{loading?'Consultando medidores…':'No se pudo consultar la lista de medidores. Reintenta la consulta.'}</p>}
    {inventoryAvailable&&!devices.length&&<p className="empty-small muted">Todavía no hay medidores. {owner?'Añade uno para comenzar a registrar consumo.':'El propietario debe añadir y activar los medidores.'}</p>}
@@ -97,11 +105,17 @@ export function MeterManagement({devices,inventoryAvailable,loading,data,unitId,
   {owner&&formOpen&&<Modal title={editing?'Editar medidor':'Añadir medidor virtual'} key={editing?.id||unitId} onClose={close} busy={busy} error={error}>
    <p className="small-text muted">{unitName} · el identificador se crea automáticamente.</p>
    {pending&&<p className="message" role="status">El medidor ya está registrado. Reintenta la activación sin crear otro.</p>}
-   {!editing&&!pending&&full&&<p className="message" role="status">{capacity?'Tu plan no tiene plazas disponibles. Revisa la capacidad en Plan y pagos.':'No pudimos consultar la capacidad. Reintenta desde Plan y pagos.'}</p>}
+   {!currentMeter&&!inventoryAvailable&&<p className="message" role="status">Espera a que se carguen los medidores de esta unidad.</p>}
+   {!currentMeter&&full&&<p className="message" role="status">{capacity?'Tu plan no tiene plazas disponibles. Revisa la capacidad en Plan y pagos.':'No pudimos consultar la capacidad. Reintenta desde Plan y pagos.'}</p>}
    <form className="stacked-form" onSubmit={save}>
     <Field label="Nombre del medidor"><input name="name" required maxLength={120} disabled={busy} defaultValue={editing?.name||''} placeholder="Ej. Medidor del departamento"/></Field>
-    <Field label="Ubicación" hint="Cada unidad necesita un medidor General. Los adicionales pueden medir Riego, Cocina o Baño."><select name="category" required disabled={busy} defaultValue={editing?.category?.toUpperCase()||(!general?'GENERAL':'COCINA')}>{editing&&!['GENERAL','RIEGO','COCINA','BAÑO'].includes(editing.category.toUpperCase())&&<option value={editing.category.toUpperCase()} disabled>{editing.category} · elige una ubicación</option>}{[['GENERAL','General'],['RIEGO','Riego'],['COCINA','Cocina'],['BAÑO','Baño']].map(([value,label])=><option key={value} value={value} disabled={value==='GENERAL'&&!!general&&general.id!==editing?.id}>{label}</option>)}</select></Field>
-    <div className="button-row"><button className="button primary" disabled={busy||(!editing&&!pending&&full)}>{busy?'Guardando…':editing?'Guardar cambios':pending?'Reintentar activación':'Crear y activar medidor'}</button><button className="button secondary" type="button" onClick={close} disabled={busy}>Cancelar</button></div>
+    <Field label="Ubicación" hint={needsGeneral?'El primer medidor de esta unidad se registra como General.':'Puedes añadir medidores para Riego, Cocina o Baño.'}>
+     <select name="category" required disabled={busy||(!currentMeter&&!inventoryAvailable)} defaultValue={currentCategory??(needsGeneral?'GENERAL':'COCINA')}>
+      {currentCategory&&!meterCategories.some(([value])=>value===currentCategory)&&<option value={currentCategory} disabled>{currentMeter?.category} · elige una ubicación</option>}
+      {categories.map(([value,label])=><option key={value} value={value} disabled={value==='GENERAL'&&!!general&&general.id!==currentMeter?.id}>{label}</option>)}
+     </select>
+    </Field>
+    <div className="button-row"><button className="button primary" disabled={busy||(!currentMeter&&!canCreate)}>{busy?'Guardando…':editing?'Guardar cambios':pending?'Reintentar activación':'Crear y activar medidor'}</button><button className="button secondary" type="button" onClick={close} disabled={busy}>Cancelar</button></div>
    </form>
   </Modal>}
  </div>;
