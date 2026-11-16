@@ -69,10 +69,22 @@ test('downloads notify subscription expiry and do not produce a file',async()=>{
   assert.deepEqual(events,['subscription-required']);
  });
 });
-test('only a persistent current-session 401 requests a new login',async()=>{
+test('a microservice 401 does not sign out a valid Identity session',async()=>{
  let calls=0;
  await usingAPI(url=>Promise.resolve(url==='/api/auth/token'?json({token:'TOKEN_'+(++calls)}):json({},401)),async(api,events)=>{
-  await assert.rejects(api.api('units'),error=>error.status===401);assert.equal(calls,2);assert.deepEqual(events,['session-expired']);
+  await assert.rejects(api.api('units'),error=>error.status===401);assert.equal(calls,2);assert.deepEqual(events,[]);
+ });
+});
+test('Identity rejecting the current browser session requests a new login',async()=>{
+ await usingAPI(()=>Promise.resolve(json({},401)),async(api,events)=>{
+  await assert.rejects(api.api('units'),error=>error.status===401);assert.deepEqual(events,['session-expired']);
+ });
+});
+test('a delayed Identity rejection cannot sign out a newer account',async()=>{
+ let rejectOld;
+ await usingAPI(()=>new Promise(resolve=>{rejectOld=resolve;}),async(api,events)=>{
+  const old=api.api('units').catch(error=>error);api.forgetToken();rejectOld(json({},401));
+  assert.equal((await old).name,'AbortError');assert.deepEqual(events,[]);
  });
 });
 test('invoice months are readable and do not shift at a timezone boundary',async()=>{
