@@ -6,7 +6,7 @@ import {api,authRequest,forgetToken,messageOf} from '../lib/api';
 import type {User,Unit,Property,Device,Dashboard,Simulation,Goal} from '../lib/types';
 import {monthLabel,liters,money,daysAgo,localDate,timestamp} from '../lib/types';
 import {ConsumptionChart,DeviceBreakdown} from './Charts';
-import {Icon,Brand,Field} from './Ui';
+import {Icon,Brand,Field,PasswordInput} from './Ui';
 import {RegistrationChallenge} from './RegistrationChallenge';
 import {UnitManagement,MeterManagement} from './ManagementPages';
 import {TariffPage} from './TariffPage';
@@ -261,7 +261,7 @@ function AuthScreen({register,error:initialError,onSuccess}:{register:boolean;er
     setBusy(true);
     try {
       const result=await authRequest(register?'sign-up/email':'sign-in/email',{email:String(form.get('email')).trim(),password:form.get('password'),
-        ...(register?{name:String(form.get('name')).trim(),profileType:profile,confirmPassword:form.get('confirmPassword')}:{rememberMe:false})},
+        ...(register?{name:String(form.get('name')).trim(),profileType:profile,confirmPassword:form.get('confirmPassword')}:{rememberMe:true})},
         register&&challengeToken?{'x-captcha-response':challengeToken}:undefined);
       await onSuccess(result.user);
     } catch(e){setError(messageOf(e));} finally{
@@ -272,8 +272,8 @@ function AuthScreen({register,error:initialError,onSuccess}:{register:boolean;er
   return <main className="auth-layout"><section className="auth-story"><a href="/" className="brand-link"><Brand/></a><div className="auth-story-copy"><span className="eyebrow">TU AGUA, EN CLARO</span><h1>Gestiona el agua de <em>tu hogar.</em></h1><p>Observa tu consumo, conoce su costo y encuentra un ritmo que tenga sentido para tu hogar.</p><span className="auth-demo-tag"><span className="pulse-dot"/>Demostración con medidores virtuales</span></div><small>HydroSmart · Proyecto académico</small></section>
     <section className="auth-form-area"><a href="/" className="back-link">← Volver al inicio</a><div className="auth-form-wrap"><span className="eyebrow">BIENVENIDO A HYDROSMART</span><h2>{register?'Tu primer paso, en claro.':'Qué bueno verte de nuevo.'}</h2><p className="muted">{register?'Crea tu cuenta y empieza a explorar tus datos.':'Ingresa a tu espacio y revisa cómo va tu consumo.'}</p>{deletionTicket&&<div className="message success" role="status">Tu solicitud de eliminación fue recibida. El acceso a la cuenta ya está cerrado; el borrado continuará en segundo plano. Referencia: {deletionTicket}</div>}{error&&<div className="message error" role="alert">{error}</div>}
       <form className="stacked-form" method="post" onSubmit={submit}>{register&&<><Field label="Nombre completo"><input name="name" autoComplete="name" placeholder="¿Cómo te llamas?" minLength={2} maxLength={120} required/></Field><Field label="Usaré HydroSmart como"><select value={profile} onChange={e=>setProfile(e.target.value)}><option value="propietario">Propietario · hogares y unidades</option><option value="inquilino">Inquilino · una unidad asignada</option></select></Field></>}
-      <Field label="Correo electrónico"><input name="email" type="email" autoComplete="email" required placeholder="tu@correo.com" maxLength={254}/></Field><Field label="Contraseña" hint={register?passwordHint:undefined}><input name="password" type="password" autoComplete={register?'new-password':'current-password'} minLength={register?12:1} maxLength={128} pattern={register?passwordPattern:undefined} required placeholder={register?'Crea una contraseña segura':'Tu contraseña'}/></Field>
-      {register&&<Field label="Repetir contraseña"><input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Escribe otra vez tu contraseña"/></Field>}
+      <Field label="Correo electrónico"><input name="email" type="email" autoComplete="email" required placeholder="tu@correo.com" maxLength={254}/></Field><Field label="Contraseña" hint={register?passwordHint:undefined}><PasswordInput name="password" autoComplete={register?'new-password':'current-password'} minLength={register?12:1} maxLength={128} pattern={register?passwordPattern:undefined} required placeholder={register?'Crea una contraseña segura':'Tu contraseña'}/></Field>
+      {register&&<Field label="Repetir contraseña"><PasswordInput name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Escribe otra vez tu contraseña"/></Field>}
       {register&&siteKey===undefined&&<p className="small-text muted" role="status">{challengeError?'No pudimos cargar la verificación. Actualiza la página para volver a intentarlo.':'Cargando verificación de seguridad…'}</p>}
       {register&&siteKey&&<RegistrationChallenge siteKey={siteKey} onToken={setChallengeToken} ref={resetChallenge}/>}
       {register&&<p className="small-text muted">Al crear tu cuenta, podrás consultar cómo se guardan y usan tus datos en la sección Privacidad.</p>}<button className="button primary full" disabled={busy || (register && !canRegister)}>{busy?'Un momento…':register?'Crear mi cuenta':'Iniciar sesión'}<Icon name="arrow"/></button></form>
