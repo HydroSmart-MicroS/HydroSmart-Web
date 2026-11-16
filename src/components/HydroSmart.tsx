@@ -27,6 +27,7 @@ export default function HydroSmart({view}:{view:string}) {
   const [user,setUser]=useState<User|null>(null);
   const [loading,setLoading]=useState(true);
   const [membership,setMembership]=useState<Membership|null>(null);
+  const [initialAccessLoading,setInitialAccessLoading]=useState(true);
   const [units,setUnits]=useState<Unit[]>([]);
   const [properties,setProperties]=useState<Property[]>([]);
   const [unitId,setUnitId]=useState('');
@@ -50,7 +51,7 @@ export default function HydroSmart({view}:{view:string}) {
   const authPage=view==='login'||view==='register';
   const manager=user?.profileType==='propietario';
   const active=membership?.active===true;
-  const effectiveView=!active&&!['perfil','privacidad','configuracion'].includes(view)?'pagos':view;
+  const effectiveView=membership&&!active&&!['perfil','privacidad','configuracion'].includes(view)?'pagos':view;
   const inbox=useInbox(!!user&&active);
   const selected=units.find(u=>u.id===unitId);
   const selectedProperty=properties.find(p=>p.id===selected?.propertyId);
@@ -65,7 +66,8 @@ export default function HydroSmart({view}:{view:string}) {
   },[]);
   const loadAccess=useCallback(async(currentUser:User)=>{
     const value=await api<Membership>('billing/status');if(typeof value?.active!=='boolean')throw new Error('No pudimos cargar tus planes. Reintenta la consulta.');setMembership(value);
-    if(value.active)await loadUnits(currentUser);else{setUnits([]);setProperties([]);setUnitId('');}
+    try{if(value.active)await loadUnits(currentUser);else{setUnits([]);setProperties([]);setUnitId('');}}
+    finally{setInitialAccessLoading(false);}
   },[loadUnits]);
   useEffect(()=>{
     const required=()=>{setMembership(old=>old?{...old,active:false}:old);router.replace('/pagos');};
@@ -80,6 +82,7 @@ export default function HydroSmart({view}:{view:string}) {
         if (!live) return;
         if (!result?.user) {if(!authPage) router.replace('/login');return;}
         setUser(result.user);if(authPage){router.replace('/');return;}
+        setLoading(false);
         await loadAccess(result.user);
       } catch(e) {if(live) setError(messageOf(e));}
       finally {if(live){setLoading(false);}}
@@ -152,7 +155,7 @@ export default function HydroSmart({view}:{view:string}) {
     setSimulation(state);setNotice(actionName==='pause'?'Generación en vivo pausada. El historial permanece guardado.':actionName==='seed'?'Generación de historial iniciada: mes anterior completo y mes actual hasta ayer.':'Generación en vivo iniciada.');
   }
   if(loading) return <div className="loading-screen"><Brand/><div className="loading-bar"/><p>Cargando tu espacio…</p></div>;
-  if(authPage) return <AuthScreen key={view} register={view==='register'} error={error} onSuccess={async(next)=>{forgetToken();setUser(next);await loadAccess(next);router.push('/');}}/>;
+  if(authPage) return <AuthScreen key={view} register={view==='register'} error={error} onSuccess={async(next)=>{forgetToken();setMembership(null);setUnits([]);setProperties([]);setUnitId('');setData(null);setDevices([]);setBudgetGoal(null);setSimulation(emptySimulation);setInitialAccessLoading(true);setUser(next);router.replace('/');}}/>;
   if(!user) return <div className="loading-screen"><Brand/><p>{error||'Abriendo el inicio de sesión…'}</p><Link className="button primary" href="/login">Iniciar sesión</Link></div>;
   return <div className="app-shell">
     <a href="#contenido" className="skip-link">Ir al contenido</a>
@@ -174,6 +177,7 @@ export default function HydroSmart({view}:{view:string}) {
           {units.length>0&&!['perfil','privacidad','pagos','notificaciones','unidades','configuracion'].includes(effectiveView)&&<label className="unit-select"><Icon name="home"/><span><small>UNIDAD ACTUAL</small><select aria-label="Unidad actual" disabled={busy} value={unitId} onChange={e=>chooseUnit(e.target.value)}>{units.map(u=><option key={u.id} value={u.id}>{u.name}{properties.filter(p=>units.some(x=>x.propertyId===p.id)).length>1?' · '+(properties.find(p=>p.id===u.propertyId)?.name||''):''}</option>)}</select></span></label>}
         </div>
         <div className="messages" aria-live="polite">{(error||pollError)&&<div className="message error" role="alert"><span>{error||pollError}</span><button onClick={()=>{setError('');setPollError('');void action(()=>loadAccess(user));}}>Reintentar</button></div>}{notice&&<div className="message success">{notice}</div>}</div>
+        {initialAccessLoading&&!['perfil','privacidad','configuracion'].includes(view)?<section className="card initial-access" role="status" aria-busy={!error}><h2>{error?(view==='pagos'?'No pudimos cargar tus planes.':'No pudimos cargar tu espacio.'):'Preparando tu espacio…'}</h2><p className="muted">Estamos preparando tus datos. Puedes seguir usando el menú.</p>{error&&<button className="button secondary" disabled={busy} onClick={()=>void action(()=>loadAccess(user))}>{view==='pagos'?'Reintentar planes':'Reintentar carga'}</button>}</section>:<>
         {simulation.seeding&&<div className="seed-progress" role="status"><span>Preparando tu historial de demostración <strong>{simulation.completed} / {simulation.total}</strong></span><progress value={simulation.completed} max={simulation.total||1}/></div>}
         {simulation.error&&<div className="message error" role="alert">{simulation.error}</div>}
         {effectiveView==='pagos'&&!membership&&<section className="card" role="status"><h2>{error?'No pudimos cargar tus planes.':'Consultando tus planes…'}</h2><p className="muted">Puedes reintentar la consulta sin cerrar tu sesión.</p><button className="button primary" disabled={busy} onClick={()=>void action(()=>loadAccess(user))}>{busy?'Consultando…':'Reintentar planes'}</button></section>}
@@ -225,6 +229,7 @@ export default function HydroSmart({view}:{view:string}) {
         {view==='configuracion'&&<SettingsPage user={user} active={active}/>}
         {view==='privacidad'&&<section className="card privacy-copy"><span className="badge">DEMOSTRACIÓN ACADÉMICA LOCAL</span><h2>Tú sabes qué se guarda.</h2><p>HydroSmart guarda tu nombre, correo, tipo de perfil y sesiones para autenticar tu cuenta; las propiedades, unidades y asignaciones que registres; y las lecturas generadas, junto con sus medidores y tarifas.</p><h3>Quién puede consultar los datos</h3><p>El propietario administra sus unidades. El propietario también asigna cada unidad a su inquilino. El inquilino consulta las lecturas de su unidad desde el inicio de su alquiler; al finalizarlo pierde ese acceso.</p><h3>Datos simulados y estimaciones</h3><p>Esta versión no recibe datos de sensores físicos. Los generadores crean lecturas de ejemplo que se guardan en las bases locales. Los costos usan la tarifa configurada por unidad. La referencia de Sedapal está fechada y puede diferir de tu recibo según categoría, distrito y subsidio.</p><h3>Opciones disponibles</h3><p>Puedes editar tu nombre en Mi perfil, descargar reportes PDF o CSV desde Historial, pausar la generación y desactivar medidores. Cerrar sesión termina la sesión del navegador; los JWT emitidos pueden seguir siendo válidos hasta 5 minutos.</p><div className="privacy-actions"><Link href="/perfil" className="button secondary">Editar mi perfil</Link><Link href="/historial" className="button secondary">Descargar mi historial</Link></div><p className="muted small-text">Puedes solicitar la eliminación desde Configuración, con tu contraseña y una confirmación. El propietario debe finalizar sus asignaciones activas y cada cuenta debe resolver sus pagos pendientes. La cuenta pierde acceso inmediatamente; los servicios borran sus datos por RabbitMQ con reintentos. Los pagos se conservan sin nombre, correo, cuenta, unidad ni referencias de Stripe durante 365 días desde el borrado y después se purgan. Se conservan marcadores técnicos no reversibles para impedir que mensajes antiguos restauren datos eliminados.</p><h3>Copias y proveedores externos</h3><p>El borrado alcanza las bases activas de esta demostración local. No retira archivos que hayas descargado ni borra registros externos de Stripe o Brevo. Las copias manuales del desarrollador, los mensajes pendientes y los registros operativos se gestionan por separado. Una copia anterior no debe restaurarse sin reaplicar los borrados. Esta política de 365 días es una decisión del proyecto; los avisos legales para un servicio público requieren una revisión específica.</p></section>}
         {!['dashboard','historial','unidades','dispositivos','tarifas','perfil','privacidad','configuracion','recomendaciones','pagos','alertas','notificaciones'].includes(view)&&<Empty title="Esta página no existe."><p>Vuelve al Dashboard para continuar.</p><Link href="/" className="button primary">Ir al Dashboard</Link></Empty>}
+        </>}
         <footer className="app-footer"><span>HydroSmart <span className="separator">/</span> Menos dudas. Más claridad.</span><span>Datos generados · Estimados en PEN</span></footer>
       </main>
     </div>
