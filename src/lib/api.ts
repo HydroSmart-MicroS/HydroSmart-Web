@@ -25,8 +25,17 @@ async function jsonResponse(response:Response) {
   return body;
 }
 export async function authRequest(path:string,body?:unknown,headers?:Record<string,string>) {
-  return jsonResponse(await fetch('/api/auth/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
-    headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...headers},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'}));
+  const version=sessionVersion;
+  const response=await fetch('/api/auth/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
+    headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...headers},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
+  const data=await jsonResponse(response);
+  if(path==='get-session'){
+    requireSession(version);
+    // Better Auth already issues this JWT with the session response.
+    const value=data?.user?response.headers.get('set-auth-jwt'):null;
+    if(value){token=value;expiresAt=Date.now()+240000;}
+  }
+  return data;
 }
 async function jwt(version:number) {
   requireSession(version);
