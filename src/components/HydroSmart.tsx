@@ -4,9 +4,10 @@ import {useRouter} from 'next/navigation';
 import {useCallback,useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {api,authRequest,forgetToken,messageOf} from '../lib/api';
 import type {User,Unit,Property,Device,Dashboard,Simulation,Goal} from '../lib/types';
-import {liters,money,daysAgo,localDate,timestamp} from '../lib/types';
+import {monthLabel,liters,money,daysAgo,localDate,timestamp} from '../lib/types';
 import {ConsumptionChart,DeviceBreakdown} from './Charts';
 import {Icon,Brand,Field} from './Ui';
+import {RegistrationChallenge} from './RegistrationChallenge';
 import {UnitManagement,MeterManagement} from './ManagementPages';
 import {TariffPage} from './TariffPage';
 import {AccountSecurity,Avatar} from './AccountSecurity';
@@ -151,7 +152,7 @@ export default function HydroSmart({view}:{view:string}) {
     setSimulation(state);setNotice(actionName==='pause'?'Generación en vivo pausada. El historial permanece guardado.':actionName==='seed'?'Generación de historial iniciada: mes anterior completo y mes actual hasta ayer.':'Generación en vivo iniciada.');
   }
   if(loading) return <div className="loading-screen"><Brand/><div className="loading-bar"/><p>Cargando tu espacio…</p></div>;
-  if(authPage) return <AuthScreen register={view==='register'} error={error} onSuccess={async(next)=>{forgetToken();setUser(next);await loadAccess(next);router.push('/');}}/>;
+  if(authPage) return <AuthScreen key={view} register={view==='register'} error={error} onSuccess={async(next)=>{forgetToken();setUser(next);await loadAccess(next);router.push('/');}}/>;
   if(!user) return <div className="loading-screen"><Brand/><p>{error||'Abriendo el inicio de sesión…'}</p><Link className="button primary" href="/login">Iniciar sesión</Link></div>;
   return <div className="app-shell">
     <a href="#contenido" className="skip-link">Ir al contenido</a>
@@ -169,7 +170,7 @@ export default function HydroSmart({view}:{view:string}) {
     <div className="app-main">
       <header className="topbar"><button className="icon-button mobile-menu" aria-label="Abrir menú" aria-expanded={menu} onClick={()=>setMenu(!menu)}><Icon name="menu"/></button><div className="breadcrumb">Mi espacio <span>/</span> <strong>{title}</strong></div><div className="topbar-right"><NotificationBell inbox={inbox}/><Link href="/perfil" aria-label="Ver mi perfil"><Avatar user={user} className="small"/></Link></div></header>
       <main id="contenido" tabIndex={-1}>
-        <div className="page-heading compact-heading"><h1>{title}</h1>
+        <div className={"page-heading compact-heading"+(effectiveView==="dashboard"?" dashboard-heading":"")}><h1>{title}</h1>
           {units.length>0&&!['perfil','privacidad','pagos','notificaciones','unidades','configuracion'].includes(effectiveView)&&<label className="unit-select"><Icon name="home"/><span><small>UNIDAD ACTUAL</small><select aria-label="Unidad actual" disabled={busy} value={unitId} onChange={e=>chooseUnit(e.target.value)}>{units.map(u=><option key={u.id} value={u.id}>{u.name}{properties.filter(p=>units.some(x=>x.propertyId===p.id)).length>1?' · '+(properties.find(p=>p.id===u.propertyId)?.name||''):''}</option>)}</select></span></label>}
         </div>
         <div className="messages" aria-live="polite">{(error||pollError)&&<div className="message error" role="alert"><span>{error||pollError}</span><button onClick={()=>{setError('');setPollError('');void action(()=>loadAccess(user));}}>Reintentar</button></div>}{notice&&<div className="message success">{notice}</div>}</div>
@@ -192,7 +193,7 @@ export default function HydroSmart({view}:{view:string}) {
           <ConsumptionStatus goal={budgetGoal} loaded={goalLoaded} error={goalError}/>
           {data&&data.readingCount===0&&!dataLoading&&manager&&<div className="callout"><span><strong>Tu panel está listo. Faltan las lecturas.</strong><small>Prepara medidores de ejemplo o activa los que ya creaste.</small></span><button className="button primary" disabled={busy} onClick={()=>void action(prepareDemo)}>Generar demostración <Icon name="arrow"/></button></div>}
           <div className="dashboard-grid"><section className="card chart-card"><div className="card-heading"><div><h2>Así se mueve tu consumo</h2><p>Últimos 31 días · litros por día</p></div><Link href="/historial" className="text-link">Ver historial <Icon name="arrow"/></Link></div>{data?<ConsumptionChart daily={data.daily}/>:<p className="empty-small muted" role="status">{dataLoading?'Consultando consumo…':'El consumo no está disponible temporalmente. Reintenta la consulta.'}</p>}</section>
-            <section className="card"><div className="card-heading"><div><h2>¿Dónde se usa el agua?</h2><p>Distribución del mismo período</p></div></div>{data?<DeviceBreakdown daily={data.daily} devices={devices}/>:<p className="empty-small muted" role="status">{dataLoading?'Consultando distribución…':'La distribución no está disponible temporalmente.'}</p>}</section></div>
+            <section className="card"><div className="card-heading"><div><h2>Mediciones por zona</h2><p>{data?.totalSource==='legacy_sum'?'Suma heredada de medidores. Elige GENERAL desde Medidores.':'GENERAL define el total. Las zonas muestran su detalle.'}</p></div></div>{data?<DeviceBreakdown daily={data.meterDaily||data.daily} devices={devices} totalLiters={data.liters}/>:<p className="empty-small muted" role="status">{dataLoading?'Consultando distribución…':'La distribución no está disponible temporalmente.'}</p>}</section></div>
           <section className="card cost-card monthly-cost"><div className="card-heading"><div><h2>Detalle del estimado mensual</h2><p>{data?.tariffName||'Tarifa de la unidad'} · {data?liters(data.monthLiters/1000):'—'} m³ registrados</p></div><Link href="/tarifas" className="text-link">Ver cálculo y tarifa <Icon name="arrow"/></Link></div><div className="bill-breakdown"><div className="cost-row"><span>Agua potable</span><strong>{data?money(data.monthEstimate.water):'—'}</strong></div><div className="cost-row"><span>Saneamiento</span><strong>{data?money(data.monthEstimate.sewer):'—'}</strong></div><div className="cost-row"><span>Cargo fijo mensual</span><strong>{data?money(data.monthEstimate.fixedCharge):'—'}</strong></div><div className="cost-row"><span>IGV {data?liters(Number(data.monthEstimate.taxRate||0)*100):'—'}%</span><strong>{data?money(data.monthEstimate.tax||0):'—'}</strong></div><div className="cost-row total"><span>Total estimado</span><strong>{data?money(data.monthEstimate.total):'—'}</strong></div></div><small>Estimación con la tarifa configurada. El plan de HydroSmart se paga por separado. No es un recibo de Sedapal.</small></section>
           <RecommendationsPanel data={data} devices={devices} loading={dataLoading} preview/>
           {manager&&<SimulationControls busy={busy} state={simulation} onAction={name=>void action(()=>simulate(name))}/>}
@@ -205,9 +206,10 @@ export default function HydroSmart({view}:{view:string}) {
             <Field label="Desde"><input type="date" value={from} required max={to} min={daysAgo(365)} onChange={e=>setFrom(e.target.value)}/></Field><Field label="Hasta"><input type="date" value={to} required min={from} max={localDate()} onChange={e=>setTo(e.target.value)}/></Field><button className="button primary" disabled={dataLoading}>Aplicar período</button>
           </form>
           <div className="history-summary"><span><strong>{data?liters(data.liters):'—'} L</strong> registrados en el período</span><span><strong>{data?money(data.estimate.total):'—'}</strong> estimados · {data?data.readingCount:'—'} lecturas</span></div>
+          {data?.estimate.months&&data.estimate.months.length>1&&<section className="card"><h2>Estimado por mes y tarifa</h2>{data.estimate.months.map(item=><div className="cost-row" key={item.month}><span>{monthLabel(item.month)} · {item.tariffName}</span><strong>{money(item.total)}</strong></div>)}</section>}
           <ComparisonPanel data={data} loading={dataLoading}/>
           <section className="card"><div className="card-heading"><div><h2>Historial de consumo</h2><p>{period.from} — {period.to} · las fechas incluyen todo el día en Lima</p></div>{dataLoading&&<span className="muted">Actualizando…</span>}</div>{data?<ConsumptionChart daily={data.daily}/>:<p className="empty-small muted" role="status">{dataLoading?'Consultando consumo…':'El consumo no está disponible temporalmente. Reintenta la consulta.'}</p>}</section>
-          <section className="card table-card"><div className="card-heading"><div><h2>Detalle por día y medidor</h2><p>Agregación de todas las lecturas del período seleccionado.</p></div></div><div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Medidor</th><th>Lecturas</th><th className="numeric">Consumo</th></tr></thead><tbody>{[...(data?.daily||[])].reverse().map(row=><tr key={row.date+row.deviceId}><td>{row.date}</td><td>{devices.find(d=>d.id===row.deviceId)?.name||'Medidor archivado'}</td><td>{row.readingCount}</td><td className="numeric strong">{liters(row.liters)} L</td></tr>)}</tbody></table>{data&&!data.daily.length&&<p className="table-empty">No hay lecturas registradas para estas fechas.</p>}</div><p className="table-footnote">El estimado suma los importes por mes con lecturas, usando la tarifa actual y un cargo fijo por mes. No equivale a una factura oficial.</p></section>
+          <section className="card table-card"><div className="card-heading"><div><h2>Detalle por día y medidor</h2><p>Lecturas por medidor. GENERAL define el total de la unidad y las zonas muestran su detalle.</p></div></div><div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Medidor</th><th>Lecturas</th><th className="numeric">Consumo</th></tr></thead><tbody>{[...(data?.meterDaily||data?.daily||[])].reverse().map(row=><tr key={row.date+row.deviceId}><td>{row.date}</td><td>{devices.find(d=>d.id===row.deviceId)?.name||'Medidor archivado'}</td><td>{row.readingCount}</td><td className="numeric strong">{liters(row.liters)} L</td></tr>)}</tbody></table>{data&&!(data.meterDaily||data.daily).length&&<p className="table-empty">No hay lecturas registradas para estas fechas.</p>}</div><p className="table-footnote">El estimado suma cada mes con lecturas usando la tarifa vigente en ese mes y su cargo fijo. GENERAL define el consumo total. No equivale a una factura oficial.</p></section>
         </>}
 
         {active&&view==='historial'&&unitId&&<ReportJobs key={unitId} unitId={unitId} from={period.from} to={period.to}/>}
@@ -237,23 +239,44 @@ function SimulationControls({busy,state,onAction}:{busy:boolean;state:Simulation
 function AuthScreen({register,error:initialError,onSuccess}:{register:boolean;error:string;onSuccess:(user:User)=>Promise<void>}) {
   const [error,setError]=useState(initialError);const [busy,setBusy]=useState(false);const [profile,setProfile]=useState('propietario');const [deletionTicket,setDeletionTicket]=useState('');
   useEffect(()=>{const query=new URLSearchParams(location.search),p=query.get('profile'),ticket=query.get('accountDeleted');if(p&&['propietario','inquilino'].includes(p))setProfile(p);if(ticket&&/^[0-9a-f-]{36}$/i.test(ticket))setDeletionTicket(ticket);},[]);
+  const [siteKey,setSiteKey]=useState<string|null>();
+  const [challengeError,setChallengeError]=useState(false);
+  const [challengeToken,setChallengeToken]=useState('');
+  const resetChallenge=useRef<() => void>(null);
+  const canRegister=siteKey===null || Boolean(siteKey && challengeToken);
+  useEffect(()=>{
+    if(!register)return;
+    let active=true;
+    authRequest('registration-challenge').then(result=>{
+      if(!active)return;
+      if(result?.siteKey===null || (typeof result?.siteKey==='string' && result.siteKey))setSiteKey(result.siteKey);
+      else setChallengeError(true);
+    }).catch(()=>{if(active)setChallengeError(true);});
+    return ()=>{active=false;};
+  },[register]);
   async function submit(e:FormEvent<HTMLFormElement>) {
-    e.preventDefault();if(busy)return;setError('');
+    e.preventDefault();if(busy || (register && !canRegister))return;setError('');
     const form=new FormData(e.currentTarget);
     if(register){const invalid=passwordError(String(form.get('password')),String(form.get('confirmPassword')));if(invalid){setError(invalid);return;}}
     setBusy(true);
     try {
       const result=await authRequest(register?'sign-up/email':'sign-in/email',{email:String(form.get('email')).trim(),password:form.get('password'),
-        ...(register?{name:String(form.get('name')).trim(),profileType:profile,confirmPassword:form.get('confirmPassword')}:{rememberMe:false})});
+        ...(register?{name:String(form.get('name')).trim(),profileType:profile,confirmPassword:form.get('confirmPassword')}:{rememberMe:false})},
+        register&&challengeToken?{'x-captcha-response':challengeToken}:undefined);
       await onSuccess(result.user);
-    } catch(e){setError(messageOf(e));} finally{setBusy(false);}
+    } catch(e){setError(messageOf(e));} finally{
+      if(register)resetChallenge.current?.();
+      setBusy(false);
+    }
   }
-  return <main className="auth-layout"><section className="auth-story"><a href="/" className="brand-link"><Brand/></a><div className="auth-story-copy"><span className="eyebrow">TU AGUA, EN CLARO</span><h1>Un hábito mejor <br/>empieza por <br/><em>entender.</em></h1><p>Observa tu consumo, conoce su costo y encuentra un ritmo que tenga sentido para tu hogar.</p><div className="auth-water-art" aria-hidden="true"><div/><div/><div/><Icon name="drop"/></div><span className="auth-demo-tag"><span className="pulse-dot"/>Demostración con medidores virtuales</span></div><small>HydroSmart · Proyecto académico</small></section>
+  return <main className="auth-layout"><section className="auth-story"><a href="/" className="brand-link"><Brand/></a><div className="auth-story-copy"><span className="eyebrow">TU AGUA, EN CLARO</span><h1>Gestiona el agua de <em>tu hogar.</em></h1><p>Observa tu consumo, conoce su costo y encuentra un ritmo que tenga sentido para tu hogar.</p><span className="auth-demo-tag"><span className="pulse-dot"/>Demostración con medidores virtuales</span></div><small>HydroSmart · Proyecto académico</small></section>
     <section className="auth-form-area"><a href="/" className="back-link">← Volver al inicio</a><div className="auth-form-wrap"><span className="eyebrow">BIENVENIDO A HYDROSMART</span><h2>{register?'Tu primer paso, en claro.':'Qué bueno verte de nuevo.'}</h2><p className="muted">{register?'Crea tu cuenta y empieza a explorar tus datos.':'Ingresa a tu espacio y revisa cómo va tu consumo.'}</p>{deletionTicket&&<div className="message success" role="status">Tu solicitud de eliminación fue recibida. El acceso a la cuenta ya está cerrado; el borrado continuará en segundo plano. Referencia: {deletionTicket}</div>}{error&&<div className="message error" role="alert">{error}</div>}
       <form className="stacked-form" method="post" onSubmit={submit}>{register&&<><Field label="Nombre completo"><input name="name" autoComplete="name" placeholder="¿Cómo te llamas?" minLength={2} maxLength={120} required/></Field><Field label="Usaré HydroSmart como"><select value={profile} onChange={e=>setProfile(e.target.value)}><option value="propietario">Propietario · hogares y unidades</option><option value="inquilino">Inquilino · una unidad asignada</option></select></Field></>}
       <Field label="Correo electrónico"><input name="email" type="email" autoComplete="email" required placeholder="tu@correo.com" maxLength={254}/></Field><Field label="Contraseña" hint={register?passwordHint:undefined}><input name="password" type="password" autoComplete={register?'new-password':'current-password'} minLength={register?12:1} maxLength={128} pattern={register?passwordPattern:undefined} required placeholder={register?'Crea una contraseña segura':'Tu contraseña'}/></Field>
       {register&&<Field label="Repetir contraseña"><input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Escribe otra vez tu contraseña"/></Field>}
-      {register&&<p className="small-text muted">Al crear tu cuenta, podrás consultar cómo se guardan y usan tus datos en la sección Privacidad.</p>}<button className="button primary full" disabled={busy}>{busy?'Un momento…':register?'Crear mi cuenta':'Iniciar sesión'}<Icon name="arrow"/></button></form>
+      {register&&siteKey===undefined&&<p className="small-text muted" role="status">{challengeError?'No pudimos cargar la verificación. Actualiza la página para volver a intentarlo.':'Cargando verificación de seguridad…'}</p>}
+      {register&&siteKey&&<RegistrationChallenge siteKey={siteKey} onToken={setChallengeToken} ref={resetChallenge}/>}
+      {register&&<p className="small-text muted">Al crear tu cuenta, podrás consultar cómo se guardan y usan tus datos en la sección Privacidad.</p>}<button className="button primary full" disabled={busy || (register && !canRegister)}>{busy?'Un momento…':register?'Crear mi cuenta':'Iniciar sesión'}<Icon name="arrow"/></button></form>
       {!register&&<p className="auth-switch"><Link href="/forgot-password">Olvidé mi contraseña</Link></p>}
       <p className="auth-switch">{register?'¿Ya tienes una cuenta?':'¿Aún no tienes una cuenta?'} <Link href={register?'/login':'/register'}>{register?'Inicia sesión':'Crea tu cuenta'}</Link></p><div className="auth-trust"><Icon name="shield"/>Tu sesión se guarda en una cookie del navegador.</div></div></section></main>;
 }
