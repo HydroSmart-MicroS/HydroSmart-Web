@@ -1,8 +1,12 @@
 'use client';
-import {cloneElement,useEffect,useId,useRef,type ReactElement,type ReactNode} from 'react';
+import {cloneElement,useEffect,useId,useRef,useState,type InputHTMLAttributes,type ReactElement,type ReactNode} from 'react';
 const paths:Record<string,string>={bell:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4',grid:'M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h6v6h-6z',chart:'M3 3v18h18 M7 14l4-5 4 3 5-7',home:'M3 10l9-7 9 7 M5 9v12h14V9 M9 21v-7h6v7',meter:'M4 16a9 9 0 1 1 16 0 M12 12l4-4 M8 20h8',receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6',user:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-2a8 8 0 0 1 16 0v2',drop:'M12 2C9 6 4 11 4 15a8 8 0 0 0 16 0c0-4-5-9-8-13z M7.5 15.5c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0',arrow:'M5 12h14 M13 6l6 6-6 6',logout:'M9 4H4v16h5 M10 12h11 M17 8l4 4-4 4',shield:'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6',plus:'M12 5v14 M5 12h14',menu:'M4 6h16 M4 12h16 M4 18h16'};
 export function Icon({name,className=''}:{name:string;className?:string}) {return <svg className={'icon '+className} width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]||paths.drop}/></svg>;}
 export function Brand() {return <span className="brand"><span className="brand-mark"><Icon name="drop"/></span><span>HydroSmart</span></span>;}
+export function PasswordInput(props:Omit<InputHTMLAttributes<HTMLInputElement>,'type'>) {
+  const [visible,setVisible]=useState(false);
+  return <div className="password-control"><input {...props} type={visible?'text':'password'}/><button type="button" className="password-toggle" aria-label={visible?'Ocultar contraseña':'Mostrar contraseña'} aria-pressed={visible} aria-controls={props.id} disabled={props.disabled} onClick={()=>setVisible(value=>!value)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>{visible&&<path d="m3 3 18 18"/>}</svg><span>{visible?'Ocultar':'Ver'}</span></button></div>;
+}
 export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}) {
   const id=useId();
   const child=children as ReactElement<{id?:string;'aria-describedby'?:string;type?:string;minLength?:number;maxLength?:number;pattern?:string}>;
