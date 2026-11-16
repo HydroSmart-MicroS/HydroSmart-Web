@@ -24,9 +24,9 @@ async function jsonResponse(response:Response) {
   }
   return body;
 }
-export async function authRequest(path:string,body?:unknown) {
+export async function authRequest(path:string,body?:unknown,headers?:Record<string,string>) {
   return jsonResponse(await fetch('/api/auth/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
-    headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'}));
+    headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...headers},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'}));
 }
 async function jwt(version:number) {
   requireSession(version);
