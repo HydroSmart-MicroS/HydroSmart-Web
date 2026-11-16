@@ -36,6 +36,11 @@ async function jwt(version:number) {
       requireSession(version);
       if (!data?.token) throw new ApiError('Inicia sesión para continuar.',401);
       token=data.token;expiresAt=Date.now()+240000;return token;
+    }).catch(error=>{
+      requireSession(version);
+      // Only Identity can confirm that the browser session expired.
+      if(error instanceof ApiError&&error.status===401&&typeof window!=='undefined')window.dispatchEvent(new Event('session-expired'));
+      throw error;
     });
     const tracked:Promise<string>=pending.finally(()=>{if(refresh===tracked)refresh=null;});
     refresh=tracked;
@@ -52,6 +57,7 @@ async function authorizedRequest(path:string,method='GET',body?:unknown,retry=tr
         body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
       requireSession(version);
       if(response.status===401&&retry&&attempt===0){if(token===bearer){token='';expiresAt=0;}continue;}
+      if(response.status===401)throw new ApiError('No pudimos validar el acceso con este servicio. Reintenta en unos segundos.',401);
       if(response.status===402&&typeof window!=='undefined')window.dispatchEvent(new Event('subscription-required'));
       if(!response.ok)await jsonResponse(response);
       requireSession(version);
@@ -60,7 +66,6 @@ async function authorizedRequest(path:string,method='GET',body?:unknown,retry=tr
     throw new ApiError('Tu sesión venció. Vuelve a iniciar sesión.',401);
   } catch(error) {
     requireSession(version);
-    if (error instanceof ApiError && error.status===401 && typeof window!=='undefined') window.dispatchEvent(new Event('session-expired'));
     throw error;
   }
 }
