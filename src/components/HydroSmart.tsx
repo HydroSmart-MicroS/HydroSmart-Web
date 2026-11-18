@@ -14,7 +14,6 @@ import {AccountSecurity,Avatar} from './AccountSecurity';
 import {ConsumptionStatus,ComparisonPanel,RecommendationsPanel} from './ConsumptionInsights';
 import {SettingsPage} from './SettingsPage';
 import {passwordError,passwordHint,passwordPattern} from '../lib/validation';
-import {disableBrowserPush} from '../lib/browser-push';
 import {PaymentCenter,MonitoringPage,NotificationsPage,ReportJobs,useInbox,NotificationBell,type Membership} from './Features';
 
 
@@ -23,6 +22,16 @@ function Empty({title,children}:{title:string;children:ReactNode}) {return <div 
 const emptySimulation:Simulation={running:false,seeding:false,completed:0,total:0,error:''};
 
 export default function HydroSmart({view}:{view:string}) {
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    void navigator.serviceWorker.getRegistration('/app/').then(async registration => {
+      if (!registration || !registration.active?.scriptURL.endsWith('/app/sw.js')) return;
+      const subscription = await registration.pushManager.getSubscription();
+      await subscription?.unsubscribe();
+      for (const notice of await registration.getNotifications()) notice.close();
+      await registration.unregister();
+    }).catch(() => {});
+  }, []);
   const router=useRouter();
   const [user,setUser]=useState<User|null>(null);
   const [loading,setLoading]=useState(true);
@@ -167,7 +176,7 @@ export default function HydroSmart({view}:{view:string}) {
       <nav aria-label="Navegación principal">{navigation.map(([key,label,icon])=><Link key={key} href={key==='dashboard'?'/':'/'+key} className={'nav-link '+(effectiveView===key?'active':'')} aria-current={effectiveView===key?'page':undefined}><Icon name={icon}/>{label}{effectiveView===key&&<span className="nav-indicator"/>}</Link>)}</nav>
       <div className="sidebar-bottom"><div className="simulation-note"><span className="pulse-dot"/><strong>Entorno de demostración</strong><p>Medidores virtuales.<br/>El consumo se genera localmente.</p></div>
         <Link href="/configuracion" className={'nav-link '+(['configuracion','privacidad'].includes(view)?'active':'')}><Icon name="shield"/>Configuración</Link>
-        <button className="nav-link logout" disabled={busy} onClick={()=>void action(async()=>{await disableBrowserPush().catch(()=>{});await authRequest('sign-out',{});forgetToken();setUser(null);router.push('/login');})}><Icon name="logout"/>Cerrar sesión</button>
+        <button className="nav-link logout" disabled={busy} onClick={()=>void action(async()=>{await authRequest('sign-out',{});forgetToken();setUser(null);router.push('/login');})}><Icon name="logout"/>Cerrar sesión</button>
         <div className="sidebar-user"><Avatar user={user}/><span><strong>{user.name}</strong><small>{user.profileType==='inquilino'?'Inquilino':'Propietario'}</small></span></div>
       </div>
     </aside>

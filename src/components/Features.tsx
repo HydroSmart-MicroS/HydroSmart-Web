@@ -6,7 +6,6 @@ import {liters,money,timestamp,localDate,monthLabel,type Unit,type Goal} from '.
 import {Field,Icon} from './Ui';
 import styles from './Payments.module.css';
 import {LeakActions} from './LeakActions';
-import {BrowserPushControls} from './BrowserPushControls';
 
 type Plan={code:string;priceMinor:number;deviceLimit:number};
 export type Membership={active:boolean;planCode:string|null;paidThrough:string|null;deviceLimit:number;cancelAtPeriodEnd?:boolean;plans?:Plan[];devices:null|{count:number;items:{id:string;name:string;unit_id:string;managed:boolean}[]}};
@@ -190,7 +189,6 @@ export function NotificationsPage({inbox}:{inbox:InboxHook}){
    {inbox.data&&!inbox.data.items.length&&!inbox.error&&<p className="muted">No tienes notificaciones todavía. Las alertas de tu unidad aparecerán aquí.</p>}
    {inbox.data?.nextCursor&&<div className="button-row inbox-pagination"><button className="button secondary" disabled={inbox.loadingMore||busy} onClick={()=>void inbox.loadMore()}>{inbox.loadingMore?'Cargando anteriores…':'Ver notificaciones anteriores'}</button></div>}
   </section>
-  <BrowserPushControls counts={inbox.data?.push}/>
   <section className="card"><h2>Cómo quieres recibirlas</h2>
    {prefs&&<form className="stacked-form" onSubmit={e=>{e.preventDefault();void action(async()=>{const saved=await api<Record<string,boolean>>('notification-preferences','PUT',prefs);setPrefs(saved);setNotice('Preferencias guardadas para los próximos avisos.');});}}>
     <fieldset disabled={busy}><div className="preference-grid">{Object.entries(preferenceLabels).map(([key,label])=><label className="check-label" key={key}><input type="checkbox" checked={prefs[key]||false} onChange={e=>setPrefs({...prefs,[key]:e.target.checked})}/>{label}</label>)}</div><button className="button primary" disabled={busy}>{busy?'Guardando…':'Guardar preferencias'}</button></fieldset>
